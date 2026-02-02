@@ -15,7 +15,7 @@ jobs:
       - name: Sync fork with upstream
         uses: tgymnich/fork-sync@v2.0.10
         with:
-          owner: 你的GitHub用户名
+          owner: Review977
           repo: danmu_api
           base: main
           head: main
