@@ -2,24 +2,65 @@ name: Sync upstream
 
 on:
   schedule:
-    - cron: "0 2 * * *"   # 每天执行一次（UTC 时间）
-  workflow_dispatch:       # 允许手动触发
+    - cron: "0 */6 * * *"   # 每 6 小时检查一次
+  workflow_dispatch:
 
 permissions:
   contents: write
+
+env:
+  UPSTREAM_REPO: huangxd/danmu_api     # ← 改成你的上游 owner/repo
+  UPSTREAM_BRANCH: main               # ← 上游分支
+  TARGET_BRANCH: main                 # ← 你 fork 的目标分支
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Sync fork with upstream
-        uses: tgymnich/fork-sync@v2.0.10
+      - name: Checkout fork
+        uses: actions/checkout@v4
         with:
-          owner: Review977
-          repo: danmu_api
-          base: main
-          head: main
-          upstream_owner: huangxd
-          upstream_repo: danmu_api
-          upstream_branch: main
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Check upstream updates
+        id: check
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git" || true
+          git fetch origin "${TARGET_BRANCH}" --prune
+          git fetch upstream "${UPSTREAM_BRANCH}" --prune
+
+          LOCAL_SHA="$(git rev-parse "origin/${TARGET_BRANCH}")"
+          UPSTREAM_SHA="$(git rev-parse "upstream/${UPSTREAM_BRANCH}")"
+
+          echo "local_sha=$LOCAL_SHA" >> "$GITHUB_OUTPUT"
+          echo "upstream_sha=$UPSTREAM_SHA" >> "$GITHUB_OUTPUT"
+
+          if [ "$LOCAL_SHA" = "$UPSTREAM_SHA" ]; then
+            echo "Up-to-date. No sync needed."
+            echo "needs_sync=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Upstream changed. Will sync."
+            echo "needs_sync=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Sync (fast mirror)
+        if: steps.check.outputs.needs_sync == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git checkout "${TARGET_BRANCH}"
+          git reset --hard "upstream/${UPSTREAM_BRANCH}"
+
+          # 更安全的强推：如果远端分支被别人动过，会拒绝，避免误覆盖
+          git push origin "${TARGET_BRANCH}" --force-with-lease
+
+      - name: Summary
+        shell: bash
+        run: |
+          echo "Local:    ${{ steps.check.outputs.local_sha }}"
+          echo "Upstream: ${{ steps.check.outputs.upstream_sha }}"
+          echo "Synced:   ${{ steps.check.outputs.needs_sync }}"
