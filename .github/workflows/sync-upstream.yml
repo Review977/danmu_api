@@ -1,0 +1,25 @@
+name: Sync upstream
+
+on:
+  schedule:
+    - cron: "0 2 * * *"   # 每天执行一次（UTC 时间）
+  workflow_dispatch:       # 允许手动触发
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync fork with upstream
+        uses: tgymnich/fork-sync@v2.0.10
+        with:
+          owner: 你的GitHub用户名
+          repo: danmu_api
+          base: main
+          head: main
+          upstream_owner: huangxd
+          upstream_repo: danmu_api
+          upstream_branch: main
+          github_token: ${{ secrets.GITHUB_TOKEN }}
